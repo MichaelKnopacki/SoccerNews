@@ -1,33 +1,66 @@
 package com.example.soccernews.ui.news;
 
+import android.os.AsyncTask;
+
+import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.example.soccernews.data.SoccerNewsRepository;
 import com.example.soccernews.domain.News;
 
-import java.util.ArrayList;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class NewsViewModel extends ViewModel {
 
-    private MutableLiveData<List<News>> news;
+    //NewsViewModel acesso ao Live Data e regra de negócio
+    public enum State {
+        DOING, DONE, ERROR;
+    }
+
+    private final MutableLiveData<List<News>> news = new MutableLiveData<>();
+    private final MutableLiveData<State> state = new MutableLiveData<>();
 
     public NewsViewModel() {
-        this.news = new MutableLiveData<>();
+        this.findNews();
+    }
 
-        //TODO Remover Mock de notícias
-        List<News> news = new ArrayList<>();
-        news.add(new News( "Ferroviária tem um desfalque importante",
-                "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's " ));
-        news.add(new News( "Ferrinha Joga no Sábado",
-                "It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged" ));
-        news.add(new News( "Copa do Mundo Feminina Está Terminando",
-                "It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passagesu"));
-        this.news.setValue( news );
+    public void findNews() {
+        state.setValue( State.DOING );
+        SoccerNewsRepository.getInstance().getRemoteApi().getNews().enqueue( new Callback<List<News>>() {
+            @Override
+            public void onResponse(@NonNull Call<List<News>> call, @NonNull Response<List<News>> response) {
+                if (response.isSuccessful()) {
+                    news.setValue( response.body() );
+                    state.setValue( State.DONE );
+                } else {
+                    state.setValue( State.ERROR );
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<List<News>> call, Throwable error) {
+                //FIXME Tirar o printStackTrace quando forms para produção!
+                error.printStackTrace();
+                state.setValue( State.ERROR );
+            }
+        } );
+    }
+
+    public void saveNews(News news) {
+        AsyncTask.execute( () -> SoccerNewsRepository.getInstance().getLocalDb().newsDao().save( news ) );
     }
 
     public LiveData<List<News>> getNews() {
-        return news;
+        return this.news;
+    }
+
+    public LiveData<State> getState() {
+        return this.state;
     }
 }
